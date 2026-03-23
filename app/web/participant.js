@@ -229,6 +229,332 @@ function renderMultipleChoice(item) {
   return grid;
 }
 
+function getDragAfterElement(container, y) {
+  const draggableRows = Array.from(container.querySelectorAll(".ranking-row.draggable-row:not(.dragging)"));
+  let closestOffset = Number.NEGATIVE_INFINITY;
+  let closestElement = null;
+  draggableRows.forEach((row) => {
+    const box = row.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closestOffset) {
+      closestOffset = offset;
+      closestElement = row;
+    }
+  });
+  return closestElement;
+}
+
+function renderRanking(item) {
+  const wrap = document.createElement("div");
+  wrap.className = "ranking-wrap";
+
+  const hint = document.createElement("div");
+  hint.className = "ranking-hint";
+  hint.textContent = item.required
+    ? "拖拽调整顺序后提交。"
+    : "可勾选部分选项并拖拽排序；也可直接空答提交。";
+  wrap.appendChild(hint);
+
+  const list = document.createElement("div");
+  list.className = "ranking-list";
+  wrap.appendChild(list);
+
+  const options = item.options || [];
+  const orderKeys = options.map((opt) => String(opt.value));
+  const valueByKey = new Map(options.map((opt) => [String(opt.value), opt.value]));
+  const selectedKeys = new Set(item.required ? orderKeys : []);
+  const rowsByKey = new Map();
+
+  let draggingKey = null;
+  let dragChanged = false;
+  let touchDraggingKey = null;
+  let touchChanged = false;
+
+  function moveKeyBefore(movingKey, targetKey, placeAfter = false) {
+    if (!movingKey || !targetKey || movingKey === targetKey) {
+      return false;
+    }
+    const fromIndex = orderKeys.indexOf(movingKey);
+    const targetIndex = orderKeys.indexOf(targetKey);
+    if (fromIndex < 0 || targetIndex < 0) {
+      return false;
+    }
+    orderKeys.splice(fromIndex, 1);
+    const adjustedTargetIndex = orderKeys.indexOf(targetKey);
+    const insertIndex = placeAfter ? adjustedTargetIndex + 1 : adjustedTargetIndex;
+    orderKeys.splice(insertIndex, 0, movingKey);
+    return true;
+  }
+
+  function emitRankingChanged(reason) {
+    const rankedValues = orderKeys
+      .filter((key) => selectedKeys.has(key))
+      .map((key) => valueByKey.get(key));
+    pushEvent("ranking_changed", {
+      item_id: item.item_id,
+      reason,
+      ranked_values: rankedValues,
+    });
+  }
+
+  function syncRows(emitChange = false, reason = "reorder") {
+    const ranked = orderKeys.filter((key) => selectedKeys.has(key));
+    const unranked = orderKeys.filter((key) => !selectedKeys.has(key));
+    const ordered = ranked.concat(unranked);
+
+    let rank = 1;
+    ordered.forEach((key) => {
+      const row = rowsByKey.get(key);
+      if (!row) {
+        return;
+      }
+      const selected = selectedKeys.has(key);
+      row.classList.toggle("unranked", !selected);
+      row.classList.toggle("draggable-row", selected);
+      row.draggable = selected && !state.isSubmitting;
+
+      const rankBadge = row.querySelector(".ranking-rank");
+      if (rankBadge) {
+        rankBadge.textContent = selected ? String(rank++) : "-";
+      }
+
+      const checkbox = row.querySelector("input[type='checkbox']");
+      if (checkbox) {
+        checkbox.checked = selected;
+        checkbox.disabled = state.isSubmitting;
+      }
+
+      row.classList.toggle("disabled", state.isSubmitting);
+      list.appendChild(row);
+    });
+
+    state.currentAnswer = ranked.map((key) => valueByKey.get(key));
+    if (emitChange) {
+      emitRankingChanged(reason);
+    }
+  }
+
+  function endTouchDrag() {
+    if (!touchDraggingKey) {
+      return;
+    }
+    const row = rowsByKey.get(touchDraggingKey);
+    if (row) {
+      row.classList.remove("dragging");
+    }
+    const changed = touchChanged;
+    const endKey = touchDraggingKey;
+    touchDraggingKey = null;
+    touchChanged = false;
+    syncRows(false);
+    pushEvent("ranking_drag_end", {
+      item_id: item.item_id,
+      mode: "touch",
+      value: valueByKey.get(endKey),
+      changed,
+    });
+    if (changed) {
+      emitRankingChanged("touch_drag");
+    }
+  }
+
+  orderKeys.forEach((key) => {
+    const option = options.find((opt) => String(opt.value) === key);
+    const row = document.createElement("div");
+    row.className = "ranking-row";
+    row.dataset.key = key;
+
+    const rankBadge = document.createElement("span");
+    rankBadge.className = "ranking-rank";
+    rankBadge.textContent = "-";
+    row.appendChild(rankBadge);
+
+    const label = document.createElement("span");
+    label.className = "ranking-label";
+    label.textContent = option ? option.label : key;
+    row.appendChild(label);
+
+    if (!item.required) {
+      const checkWrap = document.createElement("label");
+      checkWrap.className = "ranking-check";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = false;
+      checkbox.addEventListener("change", () => {
+        if (state.isSubmitting) {
+          return;
+        }
+        if (checkbox.checked) {
+          selectedKeys.add(key);
+        } else {
+          selectedKeys.delete(key);
+        }
+        pushEvent("ranking_toggle", {
+          item_id: item.item_id,
+          value: valueByKey.get(key),
+          selected: checkbox.checked,
+        });
+        syncRows(true, "toggle");
+      });
+      checkWrap.appendChild(checkbox);
+      const checkText = document.createElement("span");
+      checkText.textContent = "纳入排序";
+      checkWrap.appendChild(checkText);
+      row.appendChild(checkWrap);
+    }
+
+    const handle = document.createElement("span");
+    handle.className = "ranking-handle";
+    handle.textContent = "Drag";
+    handle.setAttribute("role", "button");
+    handle.setAttribute("aria-label", "拖拽排序");
+    row.appendChild(handle);
+
+    row.addEventListener("dragstart", (event) => {
+      if (state.isSubmitting || !selectedKeys.has(key)) {
+        event.preventDefault();
+        return;
+      }
+      draggingKey = key;
+      dragChanged = false;
+      row.classList.add("dragging");
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+        try {
+          event.dataTransfer.setData("text/plain", key);
+        } catch (_) {
+          // no-op
+        }
+      }
+      pushEvent("ranking_drag_start", {
+        item_id: item.item_id,
+        mode: "mouse",
+        value: valueByKey.get(key),
+      });
+    });
+
+    row.addEventListener("dragend", () => {
+      if (draggingKey !== key) {
+        return;
+      }
+      row.classList.remove("dragging");
+      const changed = dragChanged;
+      draggingKey = null;
+      dragChanged = false;
+      syncRows(false);
+      pushEvent("ranking_drag_end", {
+        item_id: item.item_id,
+        mode: "mouse",
+        value: valueByKey.get(key),
+        changed,
+      });
+      if (changed) {
+        emitRankingChanged("mouse_drag");
+      }
+    });
+
+    handle.addEventListener(
+      "touchstart",
+      (event) => {
+        if (state.isSubmitting || !selectedKeys.has(key)) {
+          return;
+        }
+        touchDraggingKey = key;
+        touchChanged = false;
+        row.classList.add("dragging");
+        pushEvent("ranking_drag_start", {
+          item_id: item.item_id,
+          mode: "touch",
+          value: valueByKey.get(key),
+        });
+        event.preventDefault();
+      },
+      { passive: false },
+    );
+
+    handle.addEventListener(
+      "touchmove",
+      (event) => {
+        if (!touchDraggingKey || state.isSubmitting) {
+          return;
+        }
+        const touch = event.touches[0];
+        if (!touch) {
+          return;
+        }
+        const target = document.elementFromPoint(touch.clientX, touch.clientY);
+        const targetRow = target ? target.closest(".ranking-row.draggable-row") : null;
+        if (!targetRow) {
+          event.preventDefault();
+          return;
+        }
+        const targetKey = targetRow.dataset.key || "";
+        if (!targetKey || targetKey === touchDraggingKey) {
+          event.preventDefault();
+          return;
+        }
+        const box = targetRow.getBoundingClientRect();
+        const placeAfter = touch.clientY > box.top + box.height / 2;
+        const moved = moveKeyBefore(touchDraggingKey, targetKey, placeAfter);
+        if (moved) {
+          touchChanged = true;
+          syncRows(false);
+        }
+        event.preventDefault();
+      },
+      { passive: false },
+    );
+
+    handle.addEventListener("touchend", endTouchDrag, { passive: true });
+    handle.addEventListener("touchcancel", endTouchDrag, { passive: true });
+
+    rowsByKey.set(key, row);
+    list.appendChild(row);
+  });
+
+  list.addEventListener("dragover", (event) => {
+    if (!draggingKey || state.isSubmitting) {
+      return;
+    }
+    event.preventDefault();
+
+    const afterElement = getDragAfterElement(list, event.clientY);
+    if (!afterElement) {
+      const rankedWithoutDragging = orderKeys.filter((key) => selectedKeys.has(key) && key !== draggingKey);
+      const lastKey = rankedWithoutDragging[rankedWithoutDragging.length - 1];
+      if (!lastKey) {
+        return;
+      }
+      const moved = moveKeyBefore(draggingKey, lastKey, true);
+      if (moved) {
+        dragChanged = true;
+        syncRows(false);
+      }
+      return;
+    }
+
+    const targetKey = afterElement.dataset.key || "";
+    if (!targetKey || !selectedKeys.has(targetKey)) {
+      return;
+    }
+    const moved = moveKeyBefore(draggingKey, targetKey, false);
+    if (moved) {
+      dragChanged = true;
+      syncRows(false);
+    }
+  });
+
+  list.addEventListener("drop", (event) => {
+    if (!draggingKey) {
+      return;
+    }
+    event.preventDefault();
+  });
+
+  syncRows(false, "init");
+  return wrap;
+}
+
 function renderBlankOrText(item) {
   if (item.type === "blank") {
     const input = document.createElement("input");
@@ -282,8 +608,9 @@ function renderQuestion(item, currentIndex, totalItems) {
   const isLikert = item.type === "likert";
   const isSingleChoice = item.type === "single_choice";
   const isMultipleChoice = item.type === "multiple_choice";
+  const isRanking = item.type === "ranking";
   const isBranchSkippableSingle = isSingleChoice && item.group_flow_mode === "branch" && !item.required;
-  const showManualSubmit = !isLikert && (!isSingleChoice || (!item.required && !isBranchSkippableSingle));
+  const showManualSubmit = isRanking || (!isLikert && (!isSingleChoice || (!item.required && !isBranchSkippableSingle)));
 
   setHidden(els.btnSubmit, !showManualSubmit);
   setHidden(els.btnSkipBranch, !isBranchSkippableSingle);
@@ -297,6 +624,8 @@ function renderQuestion(item, currentIndex, totalItems) {
     els.answersWrap.appendChild(renderSingleChoice(item));
   } else if (isMultipleChoice) {
     els.answersWrap.appendChild(renderMultipleChoice(item));
+  } else if (isRanking) {
+    els.answersWrap.appendChild(renderRanking(item));
   } else {
     els.answersWrap.appendChild(renderBlankOrText(item));
   }
@@ -436,12 +765,14 @@ async function submitCurrentItem(trigger = "manual_button") {
   state.isSubmitting = true;
   const itemType = state.currentItem.type;
   const autoItemTypes = new Set(["likert", "single_choice"]);
+  const shouldLockAnswerControls = autoItemTypes.has(itemType) || itemType === "ranking";
   const answerControls = Array.from(els.answersWrap.querySelectorAll("button,input,textarea,select"));
-  if (autoItemTypes.has(itemType)) {
+  if (shouldLockAnswerControls) {
     answerControls.forEach((btn) => {
       btn.disabled = true;
     });
-  } else {
+  }
+  if (!autoItemTypes.has(itemType)) {
     els.btnSubmit.disabled = true;
     els.btnSubmit.textContent = "提交中...";
   }
@@ -480,11 +811,12 @@ async function submitCurrentItem(trigger = "manual_button") {
     renderQuestion(payload.next_item, payload.current_index, state.totalItems);
   } finally {
     state.isSubmitting = false;
-    if (autoItemTypes.has(itemType)) {
+    if (shouldLockAnswerControls) {
       answerControls.forEach((btn) => {
         btn.disabled = false;
       });
-    } else {
+    }
+    if (!autoItemTypes.has(itemType)) {
       els.btnSubmit.disabled = false;
       els.btnSubmit.textContent = "提交并继续";
     }

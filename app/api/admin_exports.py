@@ -13,7 +13,7 @@ from ..database import get_db
 from ..models import EventLog, ExportRecord, Project, Questionnaire, SurveyResponse, SurveySession, utcnow
 from ..security import get_current_admin
 from ..services.projects import PROJECT_PURGED
-from ..services.questionnaire import build_canonical_order
+from ..services.questionnaire import build_canonical_order, build_item_lookup
 
 
 router = APIRouter(
@@ -31,6 +31,14 @@ def _as_cell_value(value):
     if isinstance(value, (str, int, float, bool)):
         return value
     return str(value)
+
+
+def _format_ranking_answer(value):
+    if not isinstance(value, list):
+        return _as_cell_value(value)
+    if not value:
+        return None
+    return " | ".join(f"{str(item)}:{rank}" for rank, item in enumerate(value, start=1))
 
 
 @router.get("/{project_id}")
@@ -52,6 +60,7 @@ def export_project_data(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Questionnaire not found")
 
     canonical_order = build_canonical_order(questionnaire.structure_json)
+    item_lookup = build_item_lookup(questionnaire.structure_json)
     sessions = (
         db.query(SurveySession)
         .filter(SurveySession.project_id == project_id, SurveySession.questionnaire_id == questionnaire.id)
@@ -114,7 +123,11 @@ def export_project_data(
                     duration_row.append(None)
                     order_row.append(None)
             else:
-                answer_row.append(_as_cell_value(row.answer_json))
+                item_type = (item_lookup.get(item_id) or {}).get("type")
+                if item_type == "ranking":
+                    answer_row.append(_format_ranking_answer(row.answer_json))
+                else:
+                    answer_row.append(_as_cell_value(row.answer_json))
                 duration_row.append(row.duration_ms)
                 order_row.append(row.present_position)
 

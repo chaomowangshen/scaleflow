@@ -4,7 +4,7 @@
 
 ## 核心能力
 - 逐题呈现与不可回退（中断可续答，续答后题序不变）
-- 题型支持：`likert`、`blank`、`text`、`single_choice`、`multiple_choice`
+- 题型支持：`likert`、`blank`、`text`、`single_choice`、`multiple_choice`、`ranking`
 - 支持分支块：`flow_mode=branch`（单选题块内前向跳题）
 - 随机化开关：`randomize_groups`、`randomize_items`（默认都为 `true`）
 - 双端计时与事件日志（事件日志入库，不进入导出三表）

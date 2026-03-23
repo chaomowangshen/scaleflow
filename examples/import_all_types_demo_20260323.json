@@ -48,6 +48,18 @@
             "type": "text",
             "stem": "请用一句话描述你最近最大的压力来源。",
             "required": false
+          },
+          {
+            "item_id": "q_ranking_1",
+            "type": "ranking",
+            "stem": "请将以下因素按你认为的重要性排序。",
+            "required": false,
+            "options": [
+              { "value": "salary", "label": "薪资" },
+              { "value": "growth", "label": "成长空间" },
+              { "value": "culture", "label": "团队文化" },
+              { "value": "location", "label": "地理位置" }
+            ]
           }
         ]
       },

@@ -4,7 +4,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 
-QuestionType = Literal["likert", "blank", "text", "single_choice", "multiple_choice"]
+QuestionType = Literal["likert", "blank", "text", "single_choice", "multiple_choice", "ranking"]
 GroupFlowMode = Literal["linear", "branch"]
 
 
@@ -60,7 +60,7 @@ class ItemDefinition(BaseModel):
     @field_validator("options")
     @classmethod
     def ensure_choice_has_options(cls, value: list[ItemOption] | None, info: ValidationInfo):
-        if info.data.get("type") in {"likert", "single_choice", "multiple_choice"} and (not value or len(value) == 0):
+        if info.data.get("type") in {"likert", "single_choice", "multiple_choice", "ranking"} and (not value or len(value) == 0):
             raise ValueError("Choice-like item requires non-empty options")
         return value
 

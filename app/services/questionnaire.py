@@ -9,8 +9,8 @@ from fastapi import HTTPException, status
 FLOW_MODE_LINEAR = "linear"
 FLOW_MODE_BRANCH = "branch"
 END_BLOCK_SENTINEL = "__END_BLOCK__"
-CHOICE_TYPES = {"likert", "single_choice", "multiple_choice"}
-SUPPORTED_ITEM_TYPES = {"likert", "blank", "text", "single_choice", "multiple_choice"}
+CHOICE_TYPES = {"likert", "single_choice", "multiple_choice", "ranking"}
+SUPPORTED_ITEM_TYPES = {"likert", "blank", "text", "single_choice", "multiple_choice", "ranking"}
 
 
 def normalize_questionnaire_structure(questionnaire: dict) -> dict:
@@ -189,7 +189,11 @@ def build_item_lookup(questionnaire: dict) -> dict[str, dict[str, Any]]:
 def validate_answer(item: dict, answer: Any) -> None:
     item_type = item.get("type")
     required = bool(item.get("required", True))
-    if required and (answer is None or answer == "" or (item_type == "multiple_choice" and isinstance(answer, list) and len(answer) == 0)):
+    if required and (
+        answer is None
+        or answer == ""
+        or (item_type in {"multiple_choice", "ranking"} and isinstance(answer, list) and len(answer) == 0)
+    ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Item {item['item_id']} is required",
@@ -255,6 +259,36 @@ def validate_answer(item: dict, answer: Any) -> None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=f"Invalid number of selections for item {item['item_id']}",
+            )
+        return
+
+    if item_type == "ranking":
+        if not isinstance(answer, list):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Answer for item {item['item_id']} must be an array",
+            )
+
+        normalized = [str(value) for value in answer]
+        if len(normalized) != len(set(normalized)):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Duplicate ranking values for item {item['item_id']}",
+            )
+
+        options = item.get("options", [])
+        allowed = {str(opt["value"]) for opt in options}
+        invalid_values = [value for value in normalized if value not in allowed]
+        if invalid_values:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid option for item {item['item_id']}",
+            )
+
+        if required and len(normalized) != len(allowed):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Ranking item {item['item_id']} requires full ordering",
             )
         return
 
