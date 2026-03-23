@@ -90,13 +90,18 @@ uvicorn app.main:app --reload
 - `GET /admin/projects`
 - `GET /admin/projects/{project_id}/questionnaires`
 - `DELETE /admin/projects/{project_id}`（请求体需 `confirm_project_name`）
+- `POST /admin/projects/{project_id}/restore`
 - `POST /admin/projects/{project_id}/purge`
 - `POST /admin/projects/purge_due`
+- `POST /admin/projects/bulk-delete`
+- `POST /admin/projects/bulk-restore`
+- `POST /admin/projects/bulk-purge`
 
 ### 批次管理（新增）
 - `POST /admin/projects/{project_id}/batches`
 - `GET /admin/projects/{project_id}/batches`
 - `GET /admin/batches/{batch_id}/links`
+- `DELETE /admin/batches/{batch_id}`
 
 ### 兼容入口（保留）
 - `POST /admin/questionnaires/{questionnaire_id}/links/batch`

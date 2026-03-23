@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import LinkBatch, Project, Questionnaire
+from ..models import LinkBatch, Project, Questionnaire, SurveyLink
 from ..schemas import (
+    BatchDeleteResponse,
     BatchLinkRow,
     BatchLinksResponse,
     BatchSummary,
@@ -111,3 +112,20 @@ def get_batch_links(batch_id: str, db: Session = Depends(get_db)) -> BatchLinksR
             for link in links
         ],
     )
+
+
+@router.delete("/batches/{batch_id}", response_model=BatchDeleteResponse)
+def delete_batch(batch_id: str, db: Session = Depends(get_db)) -> BatchDeleteResponse:
+    batch = db.query(LinkBatch).filter(LinkBatch.id == batch_id).first()
+    if not batch:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch not found")
+    if batch.project.delete_status == PROJECT_PURGED:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    db.query(SurveyLink).filter(SurveyLink.batch_id == batch_id).update(
+        {SurveyLink.batch_id: None},
+        synchronize_session=False,
+    )
+    db.delete(batch)
+    db.commit()
+    return BatchDeleteResponse(batch_id=batch_id, deleted=True)

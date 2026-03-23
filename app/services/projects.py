@@ -32,6 +32,16 @@ def mark_project_pending_delete(db: Session, project: Project) -> Project:
     return project
 
 
+def restore_project_to_active(db: Session, project: Project) -> Project:
+    project.delete_status = PROJECT_ACTIVE
+    project.deleted_at = None
+    project.purge_after = None
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    return project
+
+
 def purge_project_data(db: Session, project: Project) -> dict[str, int]:
     export_rows = db.query(ExportRecord).filter(ExportRecord.project_id == project.id).all()
     removed_files = 0
@@ -57,4 +67,3 @@ def purge_project_data(db: Session, project: Project) -> dict[str, int]:
     db.commit()
     db.refresh(project)
     return counts
-

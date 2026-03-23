@@ -5,6 +5,11 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Project, Questionnaire, SurveyLink, SurveySession, utcnow
 from ..schemas import (
+    ProjectBulkDeleteResponse,
+    ProjectBulkPurgeResponse,
+    ProjectBulkRestoreResponse,
+    ProjectBulkRequest,
+    ProjectBulkSkippedItem,
     ProjectQuestionnairesResponse,
     ProjectDeleteRequest,
     ProjectDeleteResponse,
@@ -12,6 +17,7 @@ from ..schemas import (
     ProjectImportResponse,
     ProjectListResponse,
     ProjectPurgeResponse,
+    ProjectRestoreResponse,
     ProjectSummary,
     QuestionnaireSummary,
 )
@@ -22,6 +28,7 @@ from ..services.projects import (
     PROJECT_PURGED,
     mark_project_pending_delete,
     purge_project_data,
+    restore_project_to_active,
 )
 from ..services.questionnaire import normalize_questionnaire_structure, validate_questionnaire_structure
 
@@ -104,6 +111,113 @@ def list_projects(
     )
 
 
+@router.post("/bulk-delete", response_model=ProjectBulkDeleteResponse)
+def bulk_delete_projects(payload: ProjectBulkRequest, db: Session = Depends(get_db)) -> ProjectBulkDeleteResponse:
+    project_rows = db.query(Project).filter(Project.id.in_(payload.project_ids)).all()
+    project_map = {row.id: row for row in project_rows}
+
+    updated_ids: list[str] = []
+    skipped: list[ProjectBulkSkippedItem] = []
+    for project_id in payload.project_ids:
+        project = project_map.get(project_id)
+        if not project or project.delete_status == PROJECT_PURGED:
+            skipped.append(ProjectBulkSkippedItem(project_id=project_id, reason="Project not found"))
+            continue
+        if project.delete_status == PROJECT_PENDING_PURGE:
+            skipped.append(ProjectBulkSkippedItem(project_id=project_id, reason="Project already pending purge"))
+            continue
+        if project.delete_status != PROJECT_ACTIVE:
+            skipped.append(
+                ProjectBulkSkippedItem(
+                    project_id=project_id,
+                    reason=f"Project status {project.delete_status} cannot be soft-deleted",
+                )
+            )
+            continue
+
+        project = mark_project_pending_delete(db, project)
+        updated_ids.append(project.id)
+
+    return ProjectBulkDeleteResponse(
+        requested_count=len(payload.project_ids),
+        updated_count=len(updated_ids),
+        updated_ids=updated_ids,
+        skipped=skipped,
+    )
+
+
+@router.post("/bulk-purge", response_model=ProjectBulkPurgeResponse)
+def bulk_purge_projects(
+    payload: ProjectBulkRequest,
+    db: Session = Depends(get_db),
+    _super_admin=Depends(require_super_admin),
+) -> ProjectBulkPurgeResponse:
+    project_rows = db.query(Project).filter(Project.id.in_(payload.project_ids)).all()
+    project_map = {row.id: row for row in project_rows}
+
+    purged_ids: list[str] = []
+    skipped: list[ProjectBulkSkippedItem] = []
+    for project_id in payload.project_ids:
+        project = project_map.get(project_id)
+        if not project:
+            skipped.append(ProjectBulkSkippedItem(project_id=project_id, reason="Project not found"))
+            continue
+        if project.delete_status == PROJECT_PURGED:
+            skipped.append(ProjectBulkSkippedItem(project_id=project_id, reason="Project already purged"))
+            continue
+        if project.delete_status != PROJECT_PENDING_PURGE:
+            skipped.append(ProjectBulkSkippedItem(project_id=project_id, reason="Project must be pending purge"))
+            continue
+
+        purge_project_data(db, project)
+        purged_ids.append(project.id)
+
+    return ProjectBulkPurgeResponse(
+        requested_count=len(payload.project_ids),
+        purged_count=len(purged_ids),
+        purged_ids=purged_ids,
+        skipped=skipped,
+    )
+
+
+@router.post("/bulk-restore", response_model=ProjectBulkRestoreResponse)
+def bulk_restore_projects(payload: ProjectBulkRequest, db: Session = Depends(get_db)) -> ProjectBulkRestoreResponse:
+    project_rows = db.query(Project).filter(Project.id.in_(payload.project_ids)).all()
+    project_map = {row.id: row for row in project_rows}
+
+    restored_ids: list[str] = []
+    skipped: list[ProjectBulkSkippedItem] = []
+    for project_id in payload.project_ids:
+        project = project_map.get(project_id)
+        if not project:
+            skipped.append(ProjectBulkSkippedItem(project_id=project_id, reason="Project not found"))
+            continue
+        if project.delete_status == PROJECT_PURGED:
+            skipped.append(ProjectBulkSkippedItem(project_id=project_id, reason="Project cannot be restored once purged"))
+            continue
+        if project.delete_status == PROJECT_ACTIVE:
+            skipped.append(ProjectBulkSkippedItem(project_id=project_id, reason="Project is already active"))
+            continue
+        if project.delete_status != PROJECT_PENDING_PURGE:
+            skipped.append(
+                ProjectBulkSkippedItem(
+                    project_id=project_id,
+                    reason=f"Project status {project.delete_status} cannot be restored",
+                )
+            )
+            continue
+
+        project = restore_project_to_active(db, project)
+        restored_ids.append(project.id)
+
+    return ProjectBulkRestoreResponse(
+        requested_count=len(payload.project_ids),
+        restored_count=len(restored_ids),
+        restored_ids=restored_ids,
+        skipped=skipped,
+    )
+
+
 @router.delete("/{project_id}", response_model=ProjectDeleteResponse)
 def delete_project(project_id: str, payload: ProjectDeleteRequest, db: Session = Depends(get_db)) -> ProjectDeleteResponse:
     project = db.query(Project).filter(Project.id == project_id).first()
@@ -116,6 +230,33 @@ def delete_project(project_id: str, payload: ProjectDeleteRequest, db: Session =
 
     project = mark_project_pending_delete(db, project)
     return ProjectDeleteResponse(
+        project_id=project.id,
+        delete_status=project.delete_status,
+        deleted_at=project.deleted_at,
+        purge_after=project.purge_after,
+    )
+
+
+@router.post("/{project_id}/restore", response_model=ProjectRestoreResponse)
+def restore_project(project_id: str, db: Session = Depends(get_db)) -> ProjectRestoreResponse:
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    if project.delete_status == PROJECT_PURGED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Project cannot be restored once purged",
+        )
+    if project.delete_status == PROJECT_ACTIVE:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Project is already active")
+    if project.delete_status != PROJECT_PENDING_PURGE:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Project status {project.delete_status} cannot be restored",
+        )
+
+    project = restore_project_to_active(db, project)
+    return ProjectRestoreResponse(
         project_id=project.id,
         delete_status=project.delete_status,
         deleted_at=project.deleted_at,

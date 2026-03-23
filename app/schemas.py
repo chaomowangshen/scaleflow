@@ -123,6 +123,30 @@ class ProjectDeleteRequest(BaseModel):
     confirm_project_name: str = Field(min_length=1, max_length=255)
 
 
+class ProjectBulkRequest(BaseModel):
+    project_ids: list[str] = Field(min_length=1)
+
+    @field_validator("project_ids")
+    @classmethod
+    def normalize_project_ids(cls, value: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            item = str(raw).strip()
+            if not item or item in seen:
+                continue
+            seen.add(item)
+            normalized.append(item)
+        if not normalized:
+            raise ValueError("project_ids must contain at least one valid id")
+        return normalized
+
+
+class ProjectBulkSkippedItem(BaseModel):
+    project_id: str
+    reason: str
+
+
 class ProjectDeleteResponse(BaseModel):
     project_id: str
     delete_status: str
@@ -130,10 +154,38 @@ class ProjectDeleteResponse(BaseModel):
     purge_after: datetime
 
 
+class ProjectBulkDeleteResponse(BaseModel):
+    requested_count: int
+    updated_count: int
+    updated_ids: list[str]
+    skipped: list[ProjectBulkSkippedItem]
+
+
 class ProjectPurgeResponse(BaseModel):
     project_id: str
     delete_status: str
     deleted_counts: dict[str, int]
+
+
+class ProjectBulkPurgeResponse(BaseModel):
+    requested_count: int
+    purged_count: int
+    purged_ids: list[str]
+    skipped: list[ProjectBulkSkippedItem]
+
+
+class ProjectRestoreResponse(BaseModel):
+    project_id: str
+    delete_status: str
+    deleted_at: datetime | None
+    purge_after: datetime | None
+
+
+class ProjectBulkRestoreResponse(BaseModel):
+    requested_count: int
+    restored_count: int
+    restored_ids: list[str]
+    skipped: list[ProjectBulkSkippedItem]
 
 
 class QuestionnaireSummary(BaseModel):
@@ -208,6 +260,11 @@ class BatchLinksResponse(BaseModel):
     questionnaire_title: str
     created_at: datetime
     links: list[BatchLinkRow]
+
+
+class BatchDeleteResponse(BaseModel):
+    batch_id: str
+    deleted: bool
 
 
 class SurveyItemPayload(BaseModel):
