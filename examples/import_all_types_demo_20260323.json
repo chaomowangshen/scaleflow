@@ -1,0 +1,129 @@
+﻿{
+  "project": {
+    "project_key": "all_types_demo_20260323",
+    "name": "全题型导入测试项目",
+    "description": "用于验证题型、分支、随机化和导出"
+  },
+  "questionnaire": {
+    "id": "all_types_scale_v1",
+    "version": "1.0.0",
+    "title": "全题型综合测试问卷",
+    "consent_enabled": true,
+    "consent_text": "继续作答即表示你已知悉本问卷用途与记录规则。",
+    "randomization": {
+      "randomize_groups": true,
+      "randomize_items": true
+    },
+    "groups": [
+      {
+        "group_id": "g_intro",
+        "title": "基础题型块",
+        "flow_mode": "linear",
+        "items": [
+          {
+            "item_id": "q_likert_batch_1",
+            "type": "likert",
+            "stem": [
+              "过去一周我整体心情较为积极。",
+              "过去一周我感到精力充沛。",
+              "过去一周我能够较好地处理日常事务。"
+            ],
+            "required": true,
+            "options": [
+              { "value": 1, "label": "非常不同意" },
+              { "value": 2, "label": "不同意" },
+              { "value": 3, "label": "一般" },
+              { "value": 4, "label": "同意" },
+              { "value": 5, "label": "非常同意" }
+            ]
+          },
+          {
+            "item_id": "q_blank_1",
+            "type": "blank",
+            "stem": "请输入你最近一次运动时长（分钟）。",
+            "required": false
+          },
+          {
+            "item_id": "q_text_1",
+            "type": "text",
+            "stem": "请用一句话描述你最近最大的压力来源。",
+            "required": false
+          }
+        ]
+      },
+      {
+        "group_id": "g_branch_work",
+        "title": "分支块（单选跳题）",
+        "flow_mode": "branch",
+        "items": [
+          {
+            "item_id": "q_single_gate_1",
+            "type": "single_choice",
+            "stem": "你目前是否有固定工作？",
+            "required": false,
+            "options": [
+              { "value": "yes", "label": "是" },
+              { "value": "no", "label": "否" }
+            ],
+            "routing": {
+              "yes": "q_single_gate_2",
+              "no": "__END_BLOCK__"
+            }
+          },
+          {
+            "item_id": "q_single_gate_2",
+            "type": "single_choice",
+            "stem": "你的主要工作方式是？",
+            "required": true,
+            "options": [
+              { "value": "onsite", "label": "线下办公" },
+              { "value": "hybrid", "label": "混合办公" },
+              { "value": "remote", "label": "远程办公" }
+            ],
+            "routing": {
+              "onsite": "q_multi_work_1",
+              "hybrid": "q_multi_work_1",
+              "remote": "__END_BLOCK__"
+            }
+          },
+          {
+            "item_id": "q_multi_work_1",
+            "type": "multiple_choice",
+            "stem": "你目前最常见的工作压力来源（可多选）是？",
+            "required": false,
+            "options": [
+              { "value": "workload", "label": "工作量" },
+              { "value": "manager", "label": "管理关系" },
+              { "value": "team", "label": "团队协作" },
+              { "value": "commute", "label": "通勤" }
+            ],
+            "constraints": {
+              "min_choices": 0,
+              "max_choices": 3
+            }
+          }
+        ]
+      },
+      {
+        "group_id": "g_tail",
+        "title": "收尾块",
+        "flow_mode": "linear",
+        "items": [
+          {
+            "item_id": "q_likert_2",
+            "type": "likert",
+            "stem": "我愿意在未来一个月继续参加类似问卷。",
+            "required": true,
+            "options": [
+              { "value": 1, "label": "非常不同意" },
+              { "value": 2, "label": "不同意" },
+              { "value": 3, "label": "一般" },
+              { "value": 4, "label": "同意" },
+              { "value": 5, "label": "非常同意" }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>量表系统 - 管理员端</title>
+    <link rel="stylesheet" href="/admin-ui/admin.css" />
+  </head>
+  <body>
+    <main class="admin-root">
+      <section id="login-panel" class="login-shell">
+        <div class="login-card">
+          <div class="login-head">
+            <h1>量表采集后台</h1>
+            <p>登录后管理项目、问卷与发放链接</p>
+          </div>
+          <div class="form-grid">
+            <div>
+              <label for="base-url">API 基地址</label>
+              <input id="base-url" type="text" placeholder="http://127.0.0.1:8000" />
+            </div>
+            <div>
+              <label for="username">用户名</label>
+              <input id="username" type="text" placeholder="admin" />
+            </div>
+            <div>
+              <label for="password">密码</label>
+              <input id="password" type="password" placeholder="admin123" />
+            </div>
+          </div>
+          <div class="btn-row">
+            <button id="btn-login" class="btn btn-primary">登录</button>
+          </div>
+          <div id="status-auth" class="status"></div>
+        </div>
+      </section>
+
+      <section id="app-panel" class="hidden app-shell">
+        <aside class="sidebar">
+          <div class="brand">
+            <h2>Scale Admin</h2>
+            <p>项目与问卷管理台</p>
+          </div>
+          <nav class="nav">
+            <button class="nav-item active" data-page="import">导入中心</button>
+            <button class="nav-item" data-page="projects">项目管理</button>
+            <button class="nav-item" data-page="batches">链接批次</button>
+          </nav>
+          <div class="sidebar-foot">
+            <button id="btn-logout" class="btn btn-light btn-block">退出登录</button>
+          </div>
+        </aside>
+
+        <section class="workspace">
+          <header class="workspace-head card">
+            <div>
+              <h1 id="workspace-title">导入中心</h1>
+              <p id="workspace-subtitle">导入项目问卷 JSON，并管理导入结果</p>
+            </div>
+            <div class="workspace-actions">
+              <label for="base-url-main">API 基地址</label>
+              <input id="base-url-main" type="text" />
+            </div>
+          </header>
+
+          <section id="page-import" class="page card">
+            <div class="card-body">
+              <div class="page-title-row">
+                <h3>项目与问卷导入</h3>
+                <div class="btn-row">
+                  <button id="btn-fill-template" class="btn btn-light">填充示例模板</button>
+                  <button id="btn-pick-file" class="btn btn-light">读取本地 JSON</button>
+                  <input id="import-file" class="hidden" type="file" accept="application/json" />
+                </div>
+              </div>
+              <label for="import-json">导入 JSON</label>
+              <textarea id="import-json" placeholder="粘贴项目导入 JSON"></textarea>
+              <div class="btn-row">
+                <button id="btn-import" class="btn btn-primary">导入项目</button>
+              </div>
+              <div id="status-import" class="status"></div>
+            </div>
+          </section>
+
+          <section id="page-projects" class="page card hidden">
+            <div class="card-body">
+              <div class="page-title-row">
+                <h3>项目管理</h3>
+                <div class="btn-row">
+                  <button id="btn-refresh" class="btn btn-light">刷新</button>
+                  <button id="btn-purge-due" class="btn btn-warn">清理到期项目</button>
+                </div>
+              </div>
+
+              <div class="filter-grid">
+                <div>
+                  <label for="project-search">搜索项目</label>
+                  <input id="project-search" type="text" placeholder="按项目名 / project_key / id 搜索" />
+                </div>
+                <div>
+                  <label for="project-status-filter">状态筛选</label>
+                  <select id="project-status-filter">
+                    <option value="all">全部状态</option>
+                    <option value="active">active</option>
+                    <option value="pending_purge">pending_purge</option>
+                    <option value="purged">purged</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="project-page-size">每页数量</label>
+                  <select id="project-page-size">
+                    <option value="8">8</option>
+                    <option value="12">12</option>
+                    <option value="20">20</option>
+                  </select>
+                </div>
+                <div class="check-wrap">
+                  <label>
+                    <input id="include-purged" type="checkbox" />
+                    显示已清理项目
+                  </label>
+                </div>
+              </div>
+
+              <div class="table-wrap">
+                <table class="project-table">
+                  <thead>
+                    <tr>
+                      <th>项目</th>
+                      <th>project_key</th>
+                      <th>状态</th>
+                      <th>创建时间</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="projects-table-body"></tbody>
+                </table>
+              </div>
+
+              <div class="pager">
+                <button id="btn-page-prev" class="btn btn-light">上一页</button>
+                <span id="page-indicator">第 1 页</span>
+                <button id="btn-page-next" class="btn btn-light">下一页</button>
+              </div>
+              <div id="status-projects" class="status"></div>
+            </div>
+          </section>
+
+          <section id="page-batches" class="page card hidden">
+            <div class="card-body">
+              <div class="page-title-row">
+                <h3>批次管理</h3>
+                <div class="btn-row">
+                  <button id="btn-refresh-batches" class="btn btn-light">刷新批次</button>
+                  <button id="btn-export-project-csv" class="btn btn-light">导出项目全部批次 CSV</button>
+                  <button id="btn-export-project-txt" class="btn btn-light">导出项目全部批次 TXT</button>
+                </div>
+              </div>
+
+              <div class="filter-grid">
+                <div>
+                  <label for="batch-project-select">项目</label>
+                  <select id="batch-project-select"></select>
+                </div>
+                <div>
+                  <label for="batch-questionnaire-select">问卷</label>
+                  <select id="batch-questionnaire-select"></select>
+                </div>
+                <div>
+                  <label for="batch-count">链接数量</label>
+                  <input id="batch-count" type="number" min="1" max="5000" value="10" />
+                </div>
+                <div>
+                  <label for="batch-expire">过期天数（可空）</label>
+                  <input id="batch-expire" type="number" min="1" max="365" />
+                </div>
+              </div>
+
+              <div class="btn-row" style="margin-top: 10px;">
+                <button id="btn-create-batch" class="btn btn-primary">创建批次并生成链接</button>
+              </div>
+              <div id="batch-stats" class="status"></div>
+
+              <div class="table-wrap">
+                <table class="project-table">
+                  <thead>
+                    <tr>
+                      <th>批次ID</th>
+                      <th>问卷</th>
+                      <th>创建时间</th>
+                      <th>数量</th>
+                      <th>过期天数</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="batch-table-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <div id="drawer-mask" class="drawer-mask hidden"></div>
+        <aside id="project-drawer" class="drawer hidden">
+          <header class="drawer-head">
+            <div>
+              <h3 id="drawer-project-name">项目详情</h3>
+              <p id="drawer-project-meta">-</p>
+            </div>
+            <button id="btn-close-drawer" class="btn btn-light">关闭</button>
+          </header>
+          <div class="drawer-body">
+            <div class="btn-row">
+              <button id="btn-drawer-soft-delete" class="btn btn-danger">软删除项目</button>
+              <button id="btn-drawer-purge" class="btn btn-warn">立即清理</button>
+            </div>
+            <div id="drawer-status" class="status"></div>
+            <div id="drawer-questionnaires" class="accordion-list"></div>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <script src="/admin-ui/admin.js"></script>
+  </body>
+</html>

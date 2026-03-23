@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>受试者作答</title>
+    <link rel="stylesheet" href="/admin-ui/participant.css" />
+  </head>
+  <body>
+    <main class="layout">
+      <section class="card hero">
+        <h1 class="brand">量表作答</h1>
+        <p class="tagline">请根据真实感受作答。</p>
+        <div class="meta">
+          <div class="chip">
+            <span class="chip-label">受试者ID</span>
+            <span id="meta-participant" class="chip-value">-</span>
+          </div>
+          <div class="chip">
+            <span class="chip-label">当前进度</span>
+            <span id="meta-progress" class="chip-value">0 / 0</span>
+          </div>
+          <div class="chip">
+            <span class="chip-label">当前题计时</span>
+            <span id="meta-timer" class="chip-value">00:00</span>
+          </div>
+        </div>
+        <div class="progress">
+          <div id="progress-bar" class="progress-bar"></div>
+        </div>
+      </section>
+
+      <section id="consent-section" class="card consent-box hidden">
+        <h2 class="consent-title">知情同意</h2>
+        <p id="consent-text" class="consent-text">
+          继续作答即表示你已知悉：本问卷用于研究分析，题目将逐一展示，系统会记录每题作答时间和交互事件。
+          你可以选择同意并继续，或拒绝并结束本次作答。
+        </p>
+        <div class="consent-actions">
+          <button id="btn-consent-accept" class="btn btn-primary">同意并开始</button>
+          <button id="btn-consent-reject" class="btn btn-ghost">拒绝并退出</button>
+        </div>
+      </section>
+
+      <section id="question-section" class="card question-card hidden">
+        <h2 id="question-title" class="question-title"></h2>
+        <p id="question-note" class="question-note hidden"></p>
+        <div id="answers-wrap" class="answers"></div>
+        <div class="actions">
+          <div id="question-status" class="left-status"></div>
+          <button id="btn-skip-branch" class="btn btn-ghost hidden">跳过本块</button>
+          <button id="btn-submit" class="btn btn-primary">提交并继续</button>
+        </div>
+      </section>
+
+      <section id="message-section" class="message hidden"></section>
+    </main>
+
+    <script src="/admin-ui/participant.js"></script>
+  </body>
+</html>

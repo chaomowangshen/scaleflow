@@ -1,0 +1,39 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Tool caches
+.pytest_cache/
+.tmp_pycache/
+.mypy_cache/
+.ruff_cache/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Local databases and journals
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Runtime/output artifacts
+outputs/
+*.log
+
+# OS/IDE files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Temporary local file (do not track)
+app/web/admin_new.html
